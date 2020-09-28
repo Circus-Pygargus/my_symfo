@@ -1,0 +1,69 @@
+Création du fichier index.php, on y colle :
+    <?php
+    $name = isset($_GET['name'])? $_GET['name'] : 'world';
+    header('Content-Type: text/html; charset=utf8');
+    printf('Hello %s', htmlspecialchars($name, ENT_QUOTES));
+
+on va avoir besoin de réaliser des test unitaires, on install donc phpunit
+    composer require phpunit/phpunit --dev
+phpunit est ajouté dans composer.json et surtout on a un executable qui s'est collé dans /vendor/bin/phpunit
+on peut le lancer avec 
+    vendor/bin/phpunit   (sous linux ou mac)
+    ./vendor/bin/phpunit   (sous windows)
+on a pas lancé de test unitaire mais on sait au moins que cela fonctionnera quand on en aura besoin ;)
+
+Création du dossier /tests
+on y crée le fichier IndexTest.php, avec :
+    <?php
+
+    use PHPUnit\Framework\TestCase;
+    class IndexTest extends TestCase
+    {
+        public function testHello()
+        {
+            $_GET['name'] = 'Fabien';
+            ob_start();
+            include 'index.php';
+            $content = ob_get_clean();
+            $this->assertEquals('Hello Fabien', $content);
+        }
+    }
+
+on lance le test unitaire en donnant le chemin vers le dossier contenant les tests, avec l'options color pour avoir un chouette rendu
+    vendor/bin/phpunit tests --color
+on a un soucis, car phpunit refuse de faire des tests sur les headers ... 
+on modif la classe IndexTest en collant ces commentaires avant la méthode testHello : (ici la ligne @runInSeparateProcess suffit pour réussir le test)
+    /**
+     * @runInSeparateProcess
+     * @return void
+     * @throws ExpectationFailedException
+     * @throws InvalidArgumentException
+     */
+et c'est ok
+
+Bon, c'est une arnaque ce tuto puisqu'il faut déjà installer un composant symfo :(
+pour faciliter la tâche on va installer le composant permattant de gérer les requêtes http :
+    composer require symfony/http-foundation
+on ajoute dans index.php pour pouvoir l'utiliser :
+    use Symfony\Component\HttpFoundation\Request;
+    require __dir__ . '/vendor/autoload.php';
+    $request = Request::createFromGlobals();
+ici un var_dump de $request nous montre le contenu, on pourra maintenant récupérer les requêtes POST avec $request->request et les requêtes GET avec $request->query
+on peut maintenant remplacer cette ligne
+    // $name = isset($_GET['name'])? $_GET['name'] : 'world';
+par celle-ci :
+    $name = $request->query->get('name', 'world');  // si get('name') n'existe pas colle 'world' =)
+on peut aussi remplacer ces 2 lignes :
+    header('Content-Type: text/html; charset=utf8');
+    printf('Hello %s', htmlspecialchars($name, ENT_QUOTES));
+par 
+    $response = new Response();
+    $response->headers->set('Content-type', 'text/html; charset=utf8');
+    $response->setContent(sprintf('Hello %s', htmlspecialchars($name, ENT_QUOTES)));
+    $response->send();
+ici sprintf, au lieu d'afficher comme avec printf, renverra une chaîne de caractères, et le send() fera le taf
+
+on peut maintenant retirer la ligne  * @runInSeparateProcess de commentaire de IndexTest
+et le test passe sans soucis !
+fin de la première vidéo de Lior
+git commit -m "HTTP Foundation"
