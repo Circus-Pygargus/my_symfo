@@ -71,6 +71,7 @@ git commit -m "HTTP Foundation"
 
 
 
+
 ici on veut faire une deuxième page, et aulieu de créer une page bye.php à la racine on va créer une page qui gèrera la redirection vers la page demandée en fonction de l'utiliser
 création de /src/pages/hello.php  : on y colle le contenu de index.php
 création de bye.php
@@ -186,3 +187,71 @@ on redémarre apache pour qu'il prenne en commpte la nouvelle modif
 et ça fonctionne !
 fin de la deuxième vidéo de Lior
 git commit -m "Le front controller"
+
+
+
+
+
+on veut virer la récup de $_GET['name'] de hello.php
+on ajoute à index.php    
+    // va créer des variable selon le contenu du tableau
+    extract($request->query->all());
+    // var_dump($name);
+maintenant on peut virer le contenu de hello.php et remplacer par :
+    Hello <?= htmlspecialchars(isset($name)? $name : 'world', ENT_QUOTES) ?>
+c'est beau =)
+on veut encore amélioere le routing, on va donc charger une librairie de symfo :
+    composer require symfony/routing
+on veut faciliter la création de nouvelles routes, on crée le fichier /src/routes.php, on y colle
+    <?php
+    use Symfony\Component\Routing\Route;
+    use Symfony\Component\Routing\RouteCollection;
+    $routes = new RouteCollection;
+    // will set $name to 'world' if $_GET['name'] not found =)
+    // ! on utilise plus dans l'url /hello?name=riri mais /hello/riri !!!
+    $routes->add('hello', new Route('/hello/{name}', ['name' => 'world']));
+    $routes->add('bye', new Route('/bye'));
+    return $routes;
+et on modifie index.php pour avoir :
+    <?php
+    use Symfony\Component\HttpFoundation\Request;
+    use Symfony\Component\HttpFoundation\Response;
+    use Symfony\Component\Routing\Matcher\UrlMatcher;
+    use Symfony\Component\Routing\RequestContext;
+    use Symfony\Component\Routing\Exception\ResourceNotFoundException;
+    require __DIR__ . '/../vendor/autoload.php';
+    $request = Request::createFromGlobals();
+    $response = new Response();
+    require __DIR__ . '/../src/routes.php';
+    $context = new RequestContext();
+    $context->fromRequest($request);
+    $urlMatcher = new UrlMatcher($routes, $context);
+    $pathInfo = $request->getPathInfo();
+    try {
+        $urlMatcher->match($pathInfo);
+        // va créer des variable selon le contenu du tableau
+        // va créer $_route
+        // va créer $name si présent dans l'url
+        extract($resultat);
+        // var_dump($name);
+        ob_start();
+        include __DIR__ . '/../src/pages/' . $_route . '.php';
+        $response->setContent(ob_get_clean());
+    }
+    catch (ResourceNotFoundException $e) {
+        // $response->setContent("La page demandée n'existe pas.");
+        // $response->setStatusCode(404);
+        // remplace les 2 lignes du haut :
+        $response = new Response("La page demandée n'existe pas.", 404);
+    }
+    catch (Exception $e) {
+        $response->setContent('Une erreur est arrivée sur le serveur.');
+        $response->setStatusCode(500);
+    }
+    $response->send();
+on simplifie du coup hello.php :
+    Hello <?= htmlspecialchars($name, ENT_QUOTES) ?>
+maintenant pour ajouter un route, il suffit de l'ajouter dans /src/routes.php et de lui faire un fichier de template dans /src/pages/
+
+fin de la 3eme video de la série de Lior
+git commit -m "Le routing"
