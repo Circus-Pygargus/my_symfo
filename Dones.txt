@@ -67,3 +67,122 @@ on peut maintenant retirer la ligne  * @runInSeparateProcess de commentaire de I
 et le test passe sans soucis !
 fin de la première vidéo de Lior
 git commit -m "HTTP Foundation"
+
+
+
+
+ici on veut faire une deuxième page, et aulieu de créer une page bye.php à la racine on va créer une page qui gèrera la redirection vers la page demandée en fonction de l'utiliser
+création de /src/pages/hello.php  : on y colle le contenu de index.php
+création de bye.php
+on vide index.php et on y colle
+    <?php
+    use Symfony\Component\HttpFoundation\Request;
+    require __DIR__ . '/vendor/autoload.php';
+    $request = Request::createFromGlobals();
+    $pathInfo = $request->getPathInfo();
+    // var_dump($pathInfo);die();
+    if ($pathInfo === '/hello') {
+        include __DIR__ . '/src/pages/hello.php';
+    }
+    else {
+        include __DIR__ . '/src/pages/bye.php';
+    }
+ici bizarrement on dirait que le moderewite (le script pour vagrant) n'a pas été pris en compte car je suis obligé d'appeler la page index.php :
+    127.0.0.1:8080/index.php/hello?name=redirection
+si je fait un 
+    127.0.0.1:8080/hello?name=redirection
+        |-> erreur 404 ...
+bon, je viens d'y passer une heure ... sans succès ... je continue la vidéo et j'aurai pas de mod_rewrite, tant pis ... :(
+
+pour l'instant, on a que 2 pages, mais si on en veut bcp plus, les if et else if vont être trop nombreux ...
+on modifie en utilisant un array des possibilités de routes :
+    <?php
+    use Symfony\Component\HttpFoundation\Request;
+    require __DIR__ . '/vendor/autoload.php';
+    $request = Request::createFromGlobals();
+    $map = [
+        '/hello' => 'hello.php',
+        '/bye' => 'bye.php'
+    ];
+    $pathInfo = $request->getPathInfo();
+    include __DIR__ . '/src/pages/' . $map[$pathInfo];
+
+on a un truc pas cool : trop de code répété dans les fichiers hello et bye
+on va donc créer la $response = new Response(); dans index.php
+virant du coup cette ligne des 2 fichiers
+ceux-ci vont juste travailler avec la $response
+et c'est index.php qui la renverra :
+index.php :
+    <?php
+    use Symfony\Component\HttpFoundation\Request;
+    use Symfony\Component\HttpFoundation\Response;
+    require __DIR__ . '/vendor/autoload.php';
+    $request = Request::createFromGlobals();
+    $response = new Response();
+    $map = [
+        '/hello' => 'hello.php',
+        '/bye' => 'bye.php'
+    ];
+    $pathInfo = $request->getPathInfo();
+    include __DIR__ . '/src/pages/' . $map[$pathInfo];
+    $response->send();
+hello.php :
+    <?php
+    $name = $request->query->get('name', 'world');
+    $response->headers->set('Content-type', 'text/html; charset=utf8');
+    $response->setContent(sprintf('Hello %s', htmlspecialchars($name, ENT_QUOTES)));
+bye.php :
+    <?php
+    $response-> setContent("Goodbye !");
+cool !
+
+par contre on a plus de gestion de page 404 ... 
+là, facile, il suffit de remplacer dans index.php
+    include __DIR__ . '/src/pages/' . $map[$pathInfo];
+par 
+    if (isset($map[$pathInfo])) {
+        include __DIR__ . '/src/pages/' . $map[$pathInfo];
+    }
+    else {
+        $response->setContent("La page demandée n'existe pas.");
+        $response->setStatusCode(404);
+    }
+
+on modifie encore un peu car on voudrait que le front dev aie encore plus facile pour faire sa page donc :
+hello.php :
+    <?php
+    $name = $request->query->get('name', 'world');
+    ?>
+    Hello <?= htmlspecialchars($name, ENT_QUOTES) ?>
+bye.php
+    <h1>Goodbye !</h1>
+et on change index.php pour :    
+    if (isset($map[$pathInfo])) {
+        ob_start();
+        include __DIR__ . '/src/pages/' . $map[$pathInfo];
+        $response->setContent(ob_get_clean());
+    }
+    else {
+        $response->setContent("La page demandée n'existe pas.");
+        $response->setStatusCode(404);
+    }
+ici avec le tampon créé avec ob_start(); permet de ne pas envoyer le rendu depuis hello.php, ainsi il attend le $response.send()
+
+maintenant pour ajouter une page, il suffit de créer un fichier dans /src/pages et de coller la ref dans index.php dans $map = [] 
+=)
+
+on veut aussi que le user ne puisse accéder qu'au dossier public au lieu de la racine du site
+on colle index.php dans /public/
+on modif index.php pour :
+    require __DIR__ . '/../vendor/autoload.php';
+    include __DIR__ . '/../src/pages/' . $map[$pathInfo];
+ensuite il faut dire à apache de pointer les requêtes vers /public :
+    sudo nano /etc/apache2/sites-enabled/000-default.conf
+on modif pour avoir 
+    DocumentRoot /var/www/html/public
+CTRL + o pour enregistrer, entrée pour confirmer et CTRL + x pour fermer
+on redémarre apache pour qu'il prenne en commpte la nouvelle modif 
+    sudo service apache2 restart
+et ça fonctionne !
+fin de la deuxième vidéo de Lior
+git commit -m "Le front controller"
