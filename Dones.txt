@@ -338,3 +338,84 @@ et ça marche =)
 
 fin de la 4eme vidéo de la liste de Lior
 git commit -m "Les callables"
+
+
+
+
+
+Il reste un soucis, si notre site prend bcp d'ampleur, il faudra faire autant de routes et surtout instancier autant de new Route() que de route, et c'est pas cool surtout pour la mémoire !!
+alors, on modifie la route about en modifiant pour avoir en une string le nom du Controller et celui de la méthode voulue, les 2 séparés par un @  :   
+    $routes->add('cms/about', new Route('/a-propos', [
+        '_controller' => 'App\Controller\PageController@about'
+    ]));
+on modifie index.php pour traiter cette string et pour s'en servir pour appeler la classe et sa méthode (dans le try{}):    
+    // ici on récup le nom du controller :
+    // on récup le string dans $resultat['_controller'] depuis l'index 0 (le début donc) jusqu'à la position du @
+    $className = substr(
+        $resultat['_controller'],
+        0,
+        strpos($resultat['_controller'], '@')
+    );
+    // ici on chope une portion du string contenu dans $resultat['_controller'] depuis la position du @ + 1 (on veut pas le @) et qui va jusqu'à la fin (qu'on n'écrit pas)
+    $methodName = substr(
+        $resultat['_controller'],
+        strpos($resultat['_controller'], '@') + 1
+    );
+    // maintenant on peut appeler le callable ;)
+    $controller = [new $className, $methodName];
+    // ici attributes existe juste pour que nous (les dev) puissions ajouter du contenu à $request
+    $request->attributes->add($resultat);
+    // on appelle la fonction (crée par le dev) $controller et on lui donne an argument $request (on trouve la callable _controller dans routes.php)
+    $response = call_user_func($controller, $request);
+il ne reste plus qu'à modifier les autres routes :
+    $routes->add('hello', new Route('/hello/{name}', [
+        'name' => 'world',
+        // ici notre callable function (on l'appelle _controller par convention)
+        // ici quand on appellera _controller, il ira chercher la méthode hello de l'objet instancié depuis la classe GreetingController
+        '_controller' => 'App\Controller\GreetingController@hello'
+    ]));
+    $routes->add('bye', new Route('/bye', [
+        '_controller' => 'App\Controller\GreetingController@bye'
+    ]));
+maintenant, on instanciera une nouvelle Route uniquement quand on en a besoin =)
+mais c'est pas encore top, cra bcp de code dans index.php ...
+on va utiliser une librairie Symfo : le Controller Resolver
+on installe notre dépendance :
+    composer require symfony/http-kernel
+dans index.php, on ajoute juste avant le try{}
+    $controllerResolver = new ControllerResolver();
+on vire les lignes du try{} que l'on a créé juste avant (celles qui trouvaient le controller et sa méthode)
+et on remplace par :
+    // nous donne un array : [$instanceDuController, 'nomDeLaMéthode']
+    $controller = $controllerResolver->getController($request);
+il faut encore modifier les route car Symfo ne comprend pas @ (c'est plus du Laravel), on les remplace par des ::
+    $routes->add('hello', new Route('/hello/{name}', [
+        'name' => 'world',
+        // ici notre callable function (on l'appelle _controller par convention)
+        // ici quand on appellera _controller, il ira chercher la méthode hello de l'objet instancié depuis la classe GreetingController
+        '_controller' => 'App\Controller\GreetingController::hello'
+    ]));
+    $routes->add('bye', new Route('/bye', [
+        '_controller' => 'App\Controller\GreetingController::bye'
+    ]));
+    $routes->add('cms/about', new Route('/a-propos', [
+        // '_controller' => [new App\Controller\PageController, 'about']    
+        '_controller' => 'App\Controller\PageController::about'
+    ]));
+et c'est bon =)
+
+on va maintenant s'attaquer aux arguments de la route
+on voudrait supprimer cette ligne de GreetingController::hello()   $name = $request->attributes->get('name');
+donc on la vire et on colle $name en argument de la méthode hello
+dans index.php, juste avant le try{}, on ajoute :
+    $argumentResolver = new ArgumentResolver();
+et dans le try{} :
+    // ici l'ArgumentController va vérifier quels arguments sont nécessaires à la méthode que l'on veut appeler dasn $controller (ici hello et on veut $request et $name) et il les chope dans $request
+    $arguments = $argumentResolver->getArguments($request, $controller);
+ensuite on modifie la ligne 
+    $response = call_user_func($controller, $request);
+en (array car $arguments est un tableau)
+    $response = call_user_func_array($controller, $arguments);
+
+fin de la 5eme vidéo de la série
+git commit -m "Les resolvers"

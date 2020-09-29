@@ -18,13 +18,14 @@ $routes->add('hello', new Route('/hello/{name}', [
     'name' => 'world',
     // ici notre callable function (on l'appelle _controller par convention)
     // ici quand on appellera _controller, il ira chercher la méthode hello de l'objet instancié depuis la classe GreetingController
-    '_controller' => [new App\Controller\GreetingController, 'hello']
+    '_controller' => 'App\Controller\GreetingController::hello'
 ]));
 $routes->add('bye', new Route('/bye', [
-    '_controller' => [new App\Controller\GreetingController, 'bye']
+    '_controller' => 'App\Controller\GreetingController::bye'
 ]));
 $routes->add('cms/about', new Route('/a-propos', [
-    '_controller' => [new App\Controller\PageController, 'about']
+    // '_controller' => [new App\Controller\PageController, 'about']    
+    '_controller' => 'App\Controller\PageController::about'
 ]));
 
 return $routes;
