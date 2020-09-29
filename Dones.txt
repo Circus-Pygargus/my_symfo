@@ -255,3 +255,86 @@ maintenant pour ajouter un route, il suffit de l'ajouter dans /src/routes.php et
 
 fin de la 3eme video de la série de Lior
 git commit -m "Le routing"
+
+
+
+
+
+on va ajouter des callable dans les routes, ça permettra d'appelerun fonction (la callable) pour chaque route
+aller voir la doc php sur les callable : https://www.php.net/manual/fr/language.types.callable.php
+on crée la classe GreetingController, on y colle :
+    <?php
+    namespace App\Controller;
+    use Symfony\Component\HttpFoundation\Request;
+    use Symfony\Component\HttpFoundation\Response;
+    class GreetingController
+    {
+        public function hello (Request $request)
+        {   
+            $name = $request->attributes->get('name');
+            ob_start();
+            include __DIR__ . '/../pages/hello.php';
+            return new Response(ob_get_clean());
+        }
+    }
+on modifie la route hello pour avoir :    
+    $routes->add('hello', new Route('/hello/{name}', [
+        'name' => 'world',
+        // ici notre callable function (on l'appelle _controller par convention)
+        // ici quand on appellera _controller, il ira chercher la méthode hello de l'objet instancié depuis la classe GreetingController
+        '_controller' => [new App\Controller\GreetingController, 'hello']
+    ]));
+on modifie le try d'index.php pour n'avoir plus que ceci dedans :    
+    $resultat = $urlMatcher->match($pathInfo);
+    $request->attributes->add($resultat);
+    $response = call_user_func($resultat['_controller'], $request);
+ici on ajoute le contenu de $resultat à $request que l'on envoie en argument à la callable function _controller qui a été déclarée dans la route hello
+cette callable appelle la méthode hello de l'objet instancié à partir de la classe GreetingController
+mais soucis !!!
+on ne peut pas utiliser le namespace App dans la route car il n'est pas connu ...
+il faut donc modifier composer.json avec ceci pour lui dire où se trouve App :
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    }
+    et pour que ces lignes soient prises en compte, il faut dans le terminal: 
+        composer dump-autoload
+ce qui modifie le composer.lock ;)
+
+pour la route bye, on a juste à ajouter cette méthode au Controller GreetingController :
+    public function bye ()
+    {
+        ob_start();
+        include __DIR__ . '/../pages/bye.php';
+        return new Response(ob_get_clean());
+    }
+et on change la route bye pour :
+    $routes->add('bye', new Route('/bye', [
+        '_controller' => [new App\Controller\GreetingController, 'bye']
+    ]));
+
+si on veut ajouter un page about (avec comme route /a-propos) avec un template situé dans un sous dossier (pages/cms) :
+on crée le template /pages/cms/about.php, on y colle :
+    <h1>A propos</h1>
+on crée un controller PageController (puisqu'ici ni hello ni bye) :
+    <?php
+    namespace App\Controller;
+    use Symfony\Component\HttpFoundation\Response;
+    class PageController
+    {
+        public function about ()
+        {
+            ob_start();
+            include __DIR__ . '/../pages/cms/about.php';
+            return new Response(ob_get_clean());
+        }
+    }
+et on ajoute la route au router :
+    $routes->add('cms/about', new Route('/a-propos', [
+        '_controller' => [new App\Controller\PageController, 'about']
+    ]));
+et ça marche =)
+
+fin de la 4eme vidéo de la liste de Lior
+git commit -m "Les callables"
